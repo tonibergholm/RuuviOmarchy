@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "tonibergholm.ruuvi",
+  "name": "RuuviTags",
+  "version": "0.1.0",
+  "author": "Toni Bergholm",
+  "license": "MIT",
+  "description": "Live RuuviTag readings and favorites in the Omarchy bar",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "BarWidget.qml"},
+  "barWidget": {
+    "displayName": "RuuviTags",
+    "category": "Info",
+    "allowMultiple": false,
+    "defaultSection": "left",
+    "defaults": {"metric": "temperature", "primaryTag": "", "showName": false, "favoritesOnly": false, "database": ""},
+    "schema": [
+      {"key": "metric", "type": "string", "label": "Bar metric: temperature, humidity or pressure"},
+      {"key": "primaryTag", "type": "string", "label": "Primary sensor MAC (blank: favorite first)"},
+      {"key": "showName", "type": "boolean", "label": "Show sensor name in bar"},
+      {"key": "favoritesOnly", "type": "boolean", "label": "Only show favorites"},
+      {"key": "database", "type": "string", "label": "Database path (blank: RuuviLinux default)"}
+    ]
+  }
+}

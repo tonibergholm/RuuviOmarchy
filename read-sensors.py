@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Read a bounded, read-only snapshot of RuuviLinux's SQLite database."""
+import argparse
+from contextlib import closing
+import json
+import math
+import os
+from pathlib import Path
+import sqlite3
+import time
+
+
+def finite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value if math.isfinite(value) else None
+
+
+def snapshot(path, now=None):
+    now = time.time() if now is None else now
+    result = {"version": 1, "sensors": [], "error": ""}
+    path = Path(path).expanduser().resolve()
+    if not path.is_file():
+        result["error"] = "Open RuuviLinux to discover your tags."
+        return result
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=.25)) as db:
+            rows = db.execute("SELECT id,name,favorite,last_seen,rssi,latest FROM sensors ORDER BY favorite DESC,name COLLATE NOCASE,id LIMIT 128")
+            for identity, name, favorite, stamp, rssi, latest in rows:
+                try:
+                    values = json.loads(latest)
+                    if not isinstance(values, dict): continue
+                except (ValueError, TypeError):
+                    continue
+                stamp = finite(stamp)
+                age = max(0, now - stamp) if stamp is not None else None
+                result["sensors"].append({
+                    "id": str(identity)[:100], "name": str(name)[:80],
+                    "favorite": bool(favorite), "age": age,
+                    "stale": stamp is None or stamp > now + 5 or age > 30,
+                    "rssi": finite(rssi),
+                    **{key: finite(values.get(key)) for key in ("temperature", "humidity", "pressure", "voltage")}
+                })
+    except (sqlite3.Error, OSError):
+        result["error"] = "Cannot read saved sensors. Check RuuviLinux and the database setting."
+    return result
+
+
+def default_path():
+    return Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "ruuvilinux/sensors.sqlite3"
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--database", default="")
+    args = parser.parse_args()
+    print(json.dumps(snapshot(args.database or default_path()), allow_nan=False))
