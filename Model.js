@@ -15,6 +15,12 @@ function value(number, metric) {
 function metric(candidate) {
     return ["temperature", "humidity", "pressure"].indexOf(candidate) >= 0 ? candidate : "temperature";
 }
+function collector(report) {
+    var state = report && report.collector;
+    if (!state) return "The background collector keeps updating while the app is closed.";
+    if (!state.running) return "Background collector is offline. Start ruuvilinux-collector.service to resume.";
+    return state.homeassistant ? state.status + " · " + state.homeassistant : state.status;
+}
 function age(seconds) {
     if (seconds === null || seconds === undefined) return "No timestamp";
     if (seconds < 60) return Math.floor(seconds) + "s ago";

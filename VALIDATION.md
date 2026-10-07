@@ -1,4 +1,17 @@
-# Validation — October 3, 2026
+# Validation — October 7, 2026
+
+## 0.2.0 — collector and Home Assistant status
+
+- Eight Python reader tests and three JavaScript model tests passed locally;
+  Omarchy's plugin validator accepted the manifest. New tests cover an offline
+  collector, Home Assistant publishing status, an older collector without that
+  field and malformed socket replies.
+- The reader queried the actual running RuuviLinux 0.4 collector on this
+  machine and reported its scanning status with no Home Assistant field. End-to-end
+  Home Assistant publishing was validated in RuuviLinux 0.5 against a temporary
+  Home Assistant container; see RuuviLinux `VALIDATION.md`.
+
+## 0.1.0 — October 3, 2026
 
 - Four Python reader tests and two JavaScript model tests passed locally and in
   [public CI](https://github.com/tonibergholm/RuuviOmarchy/actions/runs/37119478941).
