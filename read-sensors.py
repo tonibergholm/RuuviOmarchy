@@ -2,11 +2,14 @@
 """Read a bounded, read-only snapshot of RuuviLinux's SQLite database."""
 import argparse
 from contextlib import closing
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
+import socket
 import sqlite3
+import tempfile
 import time
 
 
@@ -46,6 +49,32 @@ def snapshot(path, now=None):
     return result
 
 
+def collector_status(path, timeout=.25):
+    """Ask RuuviLinux's collector for status; mirrors ruuvilinux.collector_client."""
+    path = Path(path).expanduser().resolve()
+    digest = hashlib.sha256(str(path).encode()).hexdigest()[:20]
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR", str(Path(tempfile.gettempdir()) / f"ruuvilinux-{os.getuid()}")))
+    result = {"running": False, "status": "", "homeassistant": ""}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(timeout)
+            client.connect(str(runtime / f"ruuvilinux-collector-{digest}.sock"))
+            client.sendall(b'{"command":"status"}\n')
+            data = bytearray()
+            while b"\n" not in data and len(data) <= 16384:
+                packet = client.recv(4096)
+                if not packet: break
+                data.extend(packet)
+        report = json.loads(bytes(data).split(b"\n", 1)[0])
+    except (OSError, ValueError):
+        return result
+    if not isinstance(report, dict) or not report.get("running"): return result
+    ha = report.get("homeassistant")
+    result.update(running=True, status=str(report.get("status", ""))[:200])
+    if isinstance(ha, dict) and ha.get("enabled"): result["homeassistant"] = str(ha.get("status", ""))[:200]
+    return result
+
+
 def default_path():
     return Path(os.environ.get("XDG_DATA_HOME", str(Path.home() / ".local/share"))) / "ruuvilinux/sensors.sqlite3"
 
@@ -54,4 +83,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--database", default="")
     args = parser.parse_args()
-    print(json.dumps(snapshot(args.database or default_path()), allow_nan=False))
+    path = args.database or default_path()
+    report = snapshot(path)
+    report["collector"] = collector_status(path)
+    print(json.dumps(report, allow_nan=False))

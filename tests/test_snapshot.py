@@ -1,10 +1,15 @@
 import importlib.util
 from contextlib import closing
+import hashlib
 import json
+import os
 from pathlib import Path
+import socket
 import sqlite3
 import tempfile
+import threading
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location("reader", Path(__file__).parents[1] / "read-sensors.py")
 reader = importlib.util.module_from_spec(spec); spec.loader.exec_module(reader)
@@ -54,6 +59,43 @@ class SnapshotTests(unittest.TestCase):
             db.executemany("INSERT INTO sensors VALUES (?,?,?,?,?,?)",[(str(i),'Tag',0,1000,-60,'{}') for i in range(200)])
         # The limit includes one invalid JSON row, which is skipped safely.
         self.assertEqual(len(reader.snapshot(self.path)['sensors']),127)
+
+
+class CollectorStatusTests(unittest.TestCase):
+    def setUp(self):
+        # Unix socket paths are short; avoid long temporary directories.
+        self.runtime = tempfile.TemporaryDirectory(prefix='ruuvi-', dir='/tmp')
+        self.addCleanup(self.runtime.cleanup)
+        patcher = mock.patch.dict(os.environ, {'XDG_RUNTIME_DIR': self.runtime.name}); patcher.start(); self.addCleanup(patcher.stop)
+        self.database = Path(self.runtime.name) / 'sensors.sqlite3'
+
+    def serve(self, response):
+        digest = hashlib.sha256(str(self.database.resolve()).encode()).hexdigest()[:20]
+        server = socket.socket(socket.AF_UNIX); server.bind(str(Path(self.runtime.name) / f'ruuvilinux-collector-{digest}.sock')); server.listen(1)
+        self.addCleanup(server.close)
+        def answer():
+            connection, _ = server.accept()
+            with connection:
+                self.request = connection.recv(4096); connection.sendall(response)
+        thread = threading.Thread(target=answer, daemon=True); thread.start(); return thread
+
+    def test_offline_collector(self):
+        self.assertEqual(reader.collector_status(self.database), {'running': False, 'status': '', 'homeassistant': ''})
+
+    def test_status_with_home_assistant(self):
+        thread = self.serve(json.dumps({'running': True, 'status': 'Background collector · scanning',
+            'homeassistant': {'enabled': True, 'status': 'Home Assistant · publishing'}}).encode() + b'\n')
+        status = reader.collector_status(self.database); thread.join(2)
+        self.assertEqual(json.loads(self.request), {'command': 'status'})
+        self.assertEqual(status, {'running': True, 'status': 'Background collector · scanning', 'homeassistant': 'Home Assistant · publishing'})
+
+    def test_older_collector_and_bad_reply(self):
+        thread = self.serve(b'{"running": true, "status": "Background collector paused"}\n')
+        self.assertEqual(reader.collector_status(self.database)['homeassistant'], ''); thread.join(2)
+
+    def test_garbage_reply_is_offline(self):
+        thread = self.serve(b'not json\n')
+        self.assertFalse(reader.collector_status(self.database)['running']); thread.join(2)
 
 
 if __name__ == '__main__': unittest.main()

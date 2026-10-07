@@ -21,6 +21,8 @@ The widget starts on the left of the bar. Omarchy's plugin controls can move it,
 
 RuuviLinux's installer enables a separate **ruuvilinux-collector.service** user daemon. It keeps collecting when the desktop app is closed; the widget displays the same SQLite data. The GUI uses that daemon and pauses it briefly during Bluetooth tag-history downloads. No desktop window or Qt process is required for background collection. Opening RuuviLinux reuses an existing window rather than launching another one.
 
+The panel footer shows the collector's live status, or warns when it is offline. When RuuviLinux 0.5 publishes to [Home Assistant](https://www.home-assistant.io/), the footer also shows that status, for example **Home Assistant · publishing**. Home Assistant is configured in RuuviLinux, not in this widget; see its [Home Assistant section](https://github.com/tonibergholm/RuuviLinux#home-assistant-v05). The widget only asks the collector's user-only local socket for status; it never receives broker settings or passwords.
+
 Use `systemctl --user status ruuvilinux-collector.service` to check it, or `systemctl --user disable --now ruuvilinux-collector.service` to stop automatic collection. The user service starts at login; the machine must remain awake and logged in. The widget itself does not scan or connect to tags. Other connected apps must release the tag before downloading its stored history in the desktop app.
 
 ## Settings

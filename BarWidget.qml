@@ -168,7 +168,7 @@ Panel {
                     }
                     Text {
                         width: parent.width
-                        text: "The background collector keeps updating while the app is closed."
+                        text: Model.collector(root.report)
                         textFormat: Text.PlainText
                         wrapMode: Text.WordWrap
                         color: root.foreground
